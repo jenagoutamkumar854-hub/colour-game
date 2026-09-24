@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Color Prediction Game</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #121212; color: #fff; text-align: center; margin: 0; padding: 20px; }
+        .container { max-width: 400px; margin: auto; background: #1e1e1e; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .timer-box { background: #2c2c2c; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .btn-group { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 15px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; color: #fff; }
+        .btn-green { background: #4CAF50; }
+        .btn-violet { background: #9c27b0; }
+        .btn-red { background: #f44336; }
+        .btn-big { background: #ff9800; }
+        .btn-small { background: #00bcd4; }
+        .history { margin-top: 20px; text-align: left; }
+        .history-item { background: #2c2c2c; padding: 8px; margin-top: 5px; border-radius: 4px; font-size: 14px; display: flex; justify-content: space-between; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Color Prediction Game</h2>
+        
+        <div class="timer-box">
+            <p>Period: <span id="period">Loading...</span></p>
+            <h3>Time Remaining: <span id="timer">30</span>s</h3>
+            <p id="status" style="color: #ffeb3b;">Place your bet now!</p>
+        </div>
+
+        <!-- Color Betting -->
+        <h3>Select Color</h3>
+        <div class="btn-group">
+            <button class="btn-green" onclick="placeBet('color', 'Green')">Green</button>
+            <button class="btn-violet" onclick="placeBet('color', 'Violet')">Violet</button>
+            <button class="btn-red" onclick="placeBet('color', 'Red')">Red</button>
+        </div>
+
+        <!-- Big / Small Betting -->
+        <h3>Select Size</h3>
+        <div class="btn-group">
+            <button class="btn-big" onclick="placeBet('size', 'Big')">Big (5-9)</button>
+            <button class="btn-small" onclick="placeBet('size', 'Small')">Small (0-4)</button>
+        </div>
+
+        <div class="history">
+            <h3>Recent Results</h3>
+            <div id="historyList"></div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        const timerEl = document.getElementById('timer');
+        const periodEl = document.getElementById('period');
+        const statusEl = document.getElementById('status');
+        const historyListEl = document.getElementById('historyList');
+
+        function placeBet(type, choice) {
+            socket.emit('placeBet', { type, choice });
+            alert(`Bet placed on ${choice} (${type})!`);
+        }
+
+        socket.on('init', (data) => {
+            periodEl.innerText = data.period;
+            updateHistory(data.history);
+        });
+
+        socket.on('timerUpdate', (data) => {
+            timerEl.innerText = data.countdown;
+            periodEl.innerText = data.period;
+            if (data.gameState === 'betting') {
+                statusEl.innerText = "Place your bet now!";
+                statusEl.style.color = "#4CAF50";
+            } else {
+                statusEl.innerText = "Calculated Result...";
+                statusEl.style.color = "#f44336";
+            }
+        });
+
+        socket.on('gameResult', (result) => {
+            alert(`Round ${result.period} Over! Winning Number: ${result.number} (${result.color}, ${result.size})`);
+        });
+
+        socket.on('newRound', (data) => {
+            // New round started
+        });
+
+        function updateHistory(history) {
+            historyListEl.innerHTML = '';
+            history.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                div.innerHTML = `<span>Period: ${item.period}</span> <span>Num: <b>${item.number}</b></span> <span>${item.size}</span> <span>${item.color}</span>`;
+                historyListEl.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>
+
