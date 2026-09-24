@@ -1,57 +1,65 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const cors = require('cors');
+const path = require('path');
 
 const app = express();
-app.use(cors());
-app.use(express.json());
-
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: "*" }
-});
+const io = new Server(server);
 
-let currentPeriod = "20260924001";
-let countdown = 30; // 30 seconds timer
-let bets = { red: 0, green: 0 };
-let lastResult = "Waiting";
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Timer Loop
+let gameHistory = [];
+let countdown = 30;
+let currentPeriod = "2026092401"; 
+let gameState = "betting";
+
 setInterval(() => {
-    countdown--;
-    if (countdown <= 0) {
-        // House Profit Logic: Jis taraf kam paisa, woh jeeta do
-        if (bets.red < bets.green) {
-            lastResult = "red";
+    if (countdown > 0) {
+        countdown--;
+    } else {
+        if (gameState === "betting") {
+            gameState = "result";
+            countdown = 5;
+            const winningNumber = Math.floor(Math.random() * 10);
+            let color = '';
+            if (winningNumber === 0) color = 'red-violet';
+            else if (winningNumber === 5) color = 'green-violet';
+            else if ([1, 3, 7, 9].includes(winningNumber)) color = 'green';
+            else color = 'red';
+
+            let size = winningNumber >= 5 ? 'Big' : 'Small';
+
+            const resultData = {
+                period: currentPeriod,
+                number: winningNumber,
+                color: color,
+                size: size
+            };
+
+            gameHistory.unshift(resultData);
+            if (gameHistory.length > 10) gameHistory.pop();
+
+            io.emit('gameResult', resultData);
         } else {
-            lastResult = "green";
+            gameState = "betting";
+            countdown = 30;
+            currentPeriod = (parseInt(currentPeriod) + 1).toString();
+            io.emit('newRound', { period: currentPeriod, countdown });
         }
-
-        console.log(`Period ${currentPeriod} Ended. Winner: ${lastResult}`);
-
-        // Reset for next period
-        currentPeriod = (parseInt(currentPeriod) + 1).toString();
-        countdown = 30;
-        bets = { red: 0, green: 0 };
     }
-
-    // Broadcast data to all clients
-    io.emit('gameData', {
-        period: currentPeriod,
-        timer: countdown,
-        result: lastResult
-    });
+    io.emit('timerUpdate', { countdown, gameState, period: currentPeriod });
 }, 1000);
 
-// Bet API endpoint
-app.post('/api/bet', (req, res) => {
-    const { color, amount } = req.body;
-    if (color === 'red') bets.red += amount;
-    if (color === 'green') bets.green += amount;
-    res.json({ success: true, message: "Bet placed successfully" });
+io.on('connection', (socket) => {
+    socket.emit('init', { countdown, gameState, period: currentPeriod, history: gameHistory });
+
+    socket.on('placeBet', (data) => {
+        socket.emit('betSuccess', { message: 'Bet placed successfully!' });
+    });
 });
 
-server.listen(3000, () => {
-    console.log('Server is running on port 3000');
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });
